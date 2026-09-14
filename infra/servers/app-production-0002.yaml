@@ -1,0 +1,62 @@
+# Configuration manifest for a single server configuration item.
+#
+# Same convention as infra/databases: the filename is the CI's name exactly as
+# the CMDB stores it. See infra/README.md for why.
+#
+# CMDB: Server / app-production-0002
+
+ci:
+  name: app-production-0002
+  type: server
+  role: app
+  environment: production
+
+# What this host runs. Naming the business application here keeps the
+# dependency legible to a human reading the file; to link it on a change
+# ticket it also has to appear in the commit message, because the CI linker
+# only ever sees paths and commit text, never file contents.
+hosts:
+  business_application: Client Billing Engine (Group)
+  services:
+    - billing-capture-api
+    - billing-reconciliation-worker
+
+connects_to:
+  primary_store: mongodb-production-0004
+  # Read-only until the cutover completes, then decommissioned.
+  legacy_store: mysql-production-0002
+
+runtime:
+  python: "3.12"
+  process_manager: systemd
+  workers: 8
+  # Workers are recycled on a schedule rather than left to run forever. A slow
+  # leak in a long-lived payment worker shows up as mystery latency days later.
+  max_requests_per_worker: 10000
+
+resources:
+  cpu_cores: 8
+  memory_gb: 32
+  disk_gb: 200
+
+health:
+  endpoint: /healthz
+  interval_seconds: 10
+  # Three consecutive failures before removal from the load balancer, so a
+  # single slow response during a GC pause does not drain the pool.
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+
+deploy:
+  strategy: rolling
+  max_unavailable: 1
+  # Drain in-flight captures before stopping. A payment mid-capture that is
+  # killed here becomes a reconciliation item tomorrow.
+  drain_timeout_seconds: 90
+
+monitoring:
+  cpu_warn_pct: 75
+  cpu_page_pct: 90
+  memory_warn_pct: 80
+  disk_free_page_pct: 15
+  capture_latency_p99_warn_ms: 2000
