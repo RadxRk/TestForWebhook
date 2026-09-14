@@ -1,0 +1,80 @@
+# Configuration manifest for a single database configuration item.
+#
+# NAMING CONVENTION
+# The filename is the CI's name exactly as it appears in the CMDB, so a commit
+# touching this file names its own blast radius. The change workflow lists every
+# touched path on the change ticket, and the CI linker matches those paths back
+# to the service map. Rename this file and the link silently breaks.
+#
+# CMDB: Database / mongodb-production-0004
+
+ci:
+  name: mongodb-production-0004
+  key: db-mong-0004
+  type: database
+  engine: mongodb
+  version: "7.0"
+  environment: production
+
+# Systems this instance sits under. These names are also CMDB CIs, so naming
+# them in a commit message links them to the same change.
+depends_on:
+  server: app-production-0002
+  business_application: Client Billing Engine (Group)
+
+# Being retired in favour of this instance. Kept here so the cutover is legible
+# in the change record rather than only in someone's head.
+replaces: mysql-production-0002
+
+connection:
+  # Credentials come from the secret store at deploy time. Nothing sensitive
+  # belongs in this repository, which is public.
+  host_secret_ref: billing/mongodb-production-0004/host
+  auth_secret_ref: billing/mongodb-production-0004/credentials
+  database: billing_ledger
+  replica_set: rs-billing-prod
+  read_preference: primaryPreferred
+  tls: true
+
+# Write concern is deliberately strict. A payment ledger write that is
+# acknowledged by one node and then lost in an election is a reconciliation
+# problem nobody finds until month end.
+write_concern:
+  w: majority
+  j: true
+  wtimeout_ms: 5000
+
+pool:
+  min_size: 5
+  max_size: 50
+  max_idle_time_ms: 60000
+  # Fail fast rather than queueing behind an unhealthy primary. The caller
+  # retries through RetryPolicy, which backs off with jitter.
+  server_selection_timeout_ms: 3000
+
+collections:
+  - name: captures
+    # payment_id is the natural key. The unique index is what makes the
+    # SnowflakeIngest MERGE and the payment retry path safe to replay.
+    indexes:
+      - keys: { payment_id: 1 }
+        unique: true
+      - keys: { order_id: 1, captured_at: -1 }
+      - keys: { captured_at: -1 }
+        expire_after_seconds: null
+  - name: reconciliation_runs
+    indexes:
+      - keys: { run_date: -1 }
+        unique: true
+
+backup:
+  schedule: "0 3 * * *"
+  retention_days: 35
+  # Restores are rehearsed quarterly. An untested backup is a hope, not a plan.
+  last_restore_test: "2026-08-19"
+
+monitoring:
+  replication_lag_warn_seconds: 10
+  replication_lag_page_seconds: 60
+  connection_saturation_warn_pct: 80
+  disk_free_page_pct: 15
