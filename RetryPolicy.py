@@ -113,5 +113,5 @@ class RetryPolicy:
 
 # Sensible starting points. Payments get the longer budget because a dropped
 # confirmation costs a reconciliation; a warehouse batch can simply run again.
-PAYMENTS_POLICY = RetryPolicy(max_attempts=10, base_delay=0.10, max_delay=50.0)
-WAREHOUSE_POLICY = RetryPolicy(max_attempts=5, base_delay=2.0, max_delay=60.0)
+PAYMENTS_POLICY = RetryPolicy(max_attempts=20, base_delay=0.30, max_delay=50.0)
+WAREHOUSE_POLICY = RetryPolicy(max_attempts=15, base_delay=2.0, max_delay=60.0)
