@@ -21,7 +21,7 @@ from RetryPolicy import PAYMENTS_POLICY, PermanentError, RetryableError, RetryPo
 
 log = logging.getLogger(__name__)
 
-API_BASE = os.environ.get("PAYMENTS_API_BASE", "https://api.provider.test/v1")
+API_BASE = os.environ.get("PAYMENTS_API_BASE", "https://api.provider.test/v2")
 
 # Provider status codes we know how to interpret. Anything else is treated as
 # permanent, because guessing at an unknown failure is how double charges start.
